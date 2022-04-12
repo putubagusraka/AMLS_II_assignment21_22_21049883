@@ -10,7 +10,6 @@ from sklearn.preprocessing import OneHotEncoder,LabelEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report,accuracy_score,precision_score,f1_score,recall_score
 from sklearn import preprocessing
-from sklearn import svm
 from sklearn.metrics import ConfusionMatrixDisplay
 from sklearn.model_selection import KFold
 from sklearn.model_selection import GridSearchCV
@@ -18,7 +17,6 @@ from sklearn.model_selection import GridSearchCV
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Conv2D, MaxPool2D, Flatten, Dense, Dropout, BatchNormalization, Activation, GlobalAveragePooling2D
 from tensorflow.keras.optimizers import Adam, SGD
-
 from tensorflow.keras.applications import DenseNet121
 
 import matplotlib.pyplot as plt
@@ -28,16 +26,54 @@ import joblib
 from joblib import dump, load
 
 def image_processing(data_path,file_names,img_size):
-    dataset_tumor = []
+    """
+    This function reads each individual image in the directory path with the opencv module.
+    Then, it will read every image one by one and resize them depending on the use case, which will result in an array for each image
+    This will then be appended to the main dataset vector, repeat for all images.
+    
+    Key Parameters:
+    data_path = directory of image folder
+    file_names = the set of image names
+    model = the type of model that is used, svm or cnn
+       
+    Returns:
+    retinal_data = the full image dataset in vector form  
+    
+    """
+    dataset_retinal = []
     for file_name in file_names:
         file=cv2.imread(data_path+file_name+'.png', cv2.IMREAD_COLOR) 
         file_resize=cv2.resize(file,(img_size,img_size))/255.
-        dataset_tumor.append(file_resize)
-    tumor_data = np.array(dataset_tumor)
-    tumor_data = tumor_data.reshape(-1,img_size,img_size,3)
-    return tumor_data
+        dataset_retinal.append(file_resize)
+    retinal_data = np.array(dataset_retinal)
+    retinal_data = retinal_data.reshape(-1,img_size,img_size,3)
+    return retinal_data
 
 def preprocessing_data(data_path, file, image_size):
+    """
+    This is the main data preprocessing function. 
+    For training, the function will first execute the SMOTE processing to obtain an oversampled training set and labels.
+    With the newly acquired oversampled file name set, this will be used to image process each image into vector form.
+    Then the train test split is used to obtain a 80% train set and 20% test set (this is different from the final week test set)
+    Furthermore, the y train and y test is encoded.
+    
+    For svm the labels are fit_transformed using a label encoder and the label encoder is saved for later use
+    For cnn the labels are fit_transformed using a one-hot encoder and the one-hot encoder is saved for later use
+    
+    For testing, the aforementioned label encoders are called to transform the y labels. The x labels are image processed as usual.
+    
+    Key Parameters:
+    data_path = directory of image folder
+    file = the set of image names
+    image_size = modified resolution desired for images
+    
+    Returns:
+    x_train = training set used for model training (which will then be split later into training and validation)
+    x_test = testing set used for model testing
+    y_train = supervised labels for training set used for model training (which will then be split later into training and validation)
+    y_test = supervised labels for testing set used for model testing   
+    """
+    
     data = pd.read_csv(file)
     data = data.replace({0:"No DR", 1:"Mild DR", 2:"Mild DR", 3:"Clear DR",4:"Clear DR"})
     output_nodes = len(set(list(data['diagnosis'])))
@@ -57,6 +93,13 @@ def preprocessing_data(data_path, file, image_size):
     return x_train_val,x_test,y_train_val,y_test
     
 def build_VGG(image_size):
+    """
+    Build the VGG-16 and SVM Model.
+    Callable for the the training process.
+    
+    """
+    
+    
     model = Sequential()
     model.add(Conv2D(input_shape=(image_size,image_size,3),filters=32,kernel_size=(3,3),padding="same", activation="relu"))
     model.add(MaxPool2D(pool_size=(2,2),strides=(2,2)))
@@ -101,6 +144,12 @@ def build_VGG(image_size):
     return model
 
 def build_densenet(image_size):
+    """
+    Build the DenseNet-121 and SVM Model.
+    Callable for the the training process.
+    
+    """
+    
     densenet = DenseNet121(
     weights='Project Assets/DenseNet-BC-121-32-no-top.h5',
     include_top=False,
@@ -125,7 +174,18 @@ def build_densenet(image_size):
     return model
 
 def train_VGG(x_train_val, y_train_val, image_size):
-
+    """
+    This is the VGG training function with 3-fold cross validation.
+    Here accuracy, precision, recall, and f1 score are tallied and average for the 3 models
+    The CNN model is saved to local directory for any further testing
+    
+    Key Parameters:
+    x_train_val = the training set as result from the preprocessing function, split into training and validation data 
+    y_train_val = the supervised labels for training set as result from the preprocessing function, split into training and validation data 
+    image_size = image resolution
+    
+    """
+    
     ohe = joblib.load('Project Assets/ohe_encoder.joblib')
 
     kf = KFold(n_splits=3,shuffle=True)
@@ -195,7 +255,17 @@ def train_VGG(x_train_val, y_train_val, image_size):
     model.save('Project Assets/VGG_Model')
     
 def train_densenet(x_train_val, y_train_val, image_size):
-
+    """
+    This is the DenseNet training function with 3-fold cross validation.
+    Here accuracy, precision, recall, and f1 score are tallied and average for the 3 models
+    The CNN model is saved to local directory for any further testing
+    
+    Key Parameters:
+    x_train_val = the training set as result from the preprocessing function, split into training and validation data 
+    y_train_val = the supervised labels for training set as result from the preprocessing function, split into training and validation data 
+    image_size = image resolution
+    
+    """
     ohe = joblib.load('Project Assets/ohe_encoder.joblib')
 
     kf = KFold(n_splits=3,shuffle=True)
